@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import <MobileGestalt/MobileGestalt.h>
 #import <objc/runtime.h>
 #import "SpringBoard.h"
 #import "TPPrefsObserver.h"
@@ -18,6 +19,40 @@
 #endif
 
 static TPPrefsObserver* pref;
+
+typedef NS_ENUM(NSInteger, TPMultitaskingMode) {
+    TPMultitaskingModeFollowControlCenter = 0,
+    TPMultitaskingModeOff = 1,
+    TPMultitaskingModeStageManager = 3,
+};
+
+static BOOL isMultitaskingModeOff() {
+    return pref.multitaskingMode == TPMultitaskingModeOff;
+}
+
+static BOOL isStageManagerMode() {
+    return pref.multitaskingMode == TPMultitaskingModeStageManager;
+}
+
+static BOOL canInstallStageManagerSwitcherHook() {
+    Class switcherControllerClass = objc_getClass("SBSwitcherController");
+
+    return switcherControllerClass &&
+        class_getInstanceMethod(switcherControllerClass, @selector(windowManagementStyle));
+}
+
+static BOOL canInstallStageManagerCapabilityHooks() {
+    Class appSwitcherDefaultsClass = objc_getClass("SBAppSwitcherDefaults");
+    Class applicationClass = objc_getClass("SBApplication");
+
+    return appSwitcherDefaultsClass &&
+        class_getInstanceMethod(appSwitcherDefaultsClass, @selector(medusaMultitaskingEnabled)) &&
+        class_getInstanceMethod(appSwitcherDefaultsClass, @selector(chamoisWindowingEnabled)) &&
+        applicationClass &&
+        class_getInstanceMethod(applicationClass, @selector(supportsChamoisSceneResizing)) &&
+        class_getInstanceMethod(applicationClass, @selector(supportsChamoisViewResizing)) &&
+        class_getInstanceMethod(applicationClass, @selector(alwaysMaximizedInChamois));
+}
 
 // Since some methods explicitly check for user interface idiom, I have no better way to fool them
 // so I just hook them, set iPad idiom when necessary and set back to iPhone after calling original
@@ -151,6 +186,22 @@ static uint16_t forcePadIdiom = 0;
 }
 %end
 
+%group TPStageManagerSwitcherHook
+%hook SBSwitcherController
+- (NSUInteger)windowManagementStyle {
+    switch (pref.multitaskingMode) {
+        case TPMultitaskingModeOff:
+            return 0;
+        case TPMultitaskingModeStageManager:
+            return 2;
+        case TPMultitaskingModeFollowControlCenter:
+        default:
+            return %orig;
+    }
+}
+%end
+%end
+
 // Min width and height are 150, smaller may crash the app
 %hook SBSwitcherChamoisLayoutAttributes
 - (void)setGridWidths:(NSArray<NSNumber *> *)values {
@@ -227,7 +278,7 @@ static uint16_t forcePadIdiom = 0;
 %hook SBFluidSwitcherItemContainer
 - (void)setAllowedTouchResizeCorners:(NSUInteger)cornerMask {
     // !self.isResizingAllowed && 
-    if (self._screen != UIScreen.mainScreen) {
+    if (self._screen != UIScreen.mainScreen || isStageManagerMode()) {
         %orig(0b1111);
         // 1100: enable resizing for bottoms
         // 1111: enable resizing for all corners
@@ -306,7 +357,7 @@ static uint16_t forcePadIdiom = 0;
 
 %hook SBMedusaConfigurationUsageMetric
 - (BOOL)_isFloatingActive {
-    return YES;
+    return isMultitaskingModeOff() ? %orig : YES;
 }
 %end
 
@@ -316,13 +367,56 @@ static uint16_t forcePadIdiom = 0;
 }
 
 - (NSInteger)medusaCapabilities {
-    return 2;
+    return isMultitaskingModeOff() ? %orig : 2;
+}
+%end
+
+%group TPStageManagerCapabilityHooks
+%hook SBAppSwitcherDefaults
+- (BOOL)medusaMultitaskingEnabled {
+    switch (pref.multitaskingMode) {
+        case TPMultitaskingModeOff:
+            return NO;
+        case TPMultitaskingModeStageManager:
+            return YES;
+        case TPMultitaskingModeFollowControlCenter:
+        default:
+            return %orig;
+    }
+}
+
+- (BOOL)chamoisWindowingEnabled {
+    switch (pref.multitaskingMode) {
+        case TPMultitaskingModeOff:
+            return NO;
+        case TPMultitaskingModeStageManager:
+            return YES;
+        case TPMultitaskingModeFollowControlCenter:
+        default:
+            return %orig;
+    }
 }
 %end
 
 %hook SBApplication
+- (BOOL)supportsChamoisSceneResizing {
+    return isStageManagerMode() ? YES : %orig;
+}
+
+- (BOOL)supportsChamoisViewResizing {
+    return isStageManagerMode() ? YES : %orig;
+}
+
+- (BOOL)alwaysMaximizedInChamois {
+    return isStageManagerMode() ? NO : %orig;
+}
+%end
+%end
+
+%hook SBApplication
 - (BOOL)isMedusaCapable {
-    return pref.forceEnableMedusaForLandscapeOnlyApps ||
+    return isMultitaskingModeOff() ? %orig :
+        pref.forceEnableMedusaForLandscapeOnlyApps ||
         (self.info.supportedInterfaceOrientations & UIInterfaceOrientationMaskPortrait) != 0;
 }
 
@@ -333,7 +427,7 @@ static uint16_t forcePadIdiom = 0;
 
 %hook SBMainWorkspace
 - (BOOL)isMedusaEnabled {
-    return YES;
+    return isMultitaskingModeOff() ? %orig : YES;
 }
 %end
 
@@ -387,16 +481,75 @@ int hookedExtDisplayEnabledFunc() {
 }
 %end
 
-BOOL MGGetBoolAnswer(NSString* property);
-%hookf(BOOL, MGGetBoolAnswer, NSString* property) {
-    // Hook ipad, DeviceSupportsEnhancedMultitasking
-    if ([property isEqualToString:@"DeviceSupportsEnhancedMultitasking"]) {
-        return YES;
+static BOOL isEnhancedMultitaskingProperty(CFStringRef property) {
+    if (!property) {
+        return NO;
+    }
+
+    return CFEqual(property, CFSTR("DeviceSupportsEnhancedMultitasking")) ||
+        CFEqual(property, CFSTR("qeaj75wk3HF4DwQ8qbIi7g")) ||
+        CFEqual(property, CFSTR("DeviceSupportsSingleDisplayEnhancedMultitasking")) ||
+        CFEqual(property, CFSTR("fbpzGGoBNcvDLt4LlZGnfA"));
+}
+
+static BOOL isMedusaCapabilityProperty(CFStringRef property) {
+    if (!property) {
+        return NO;
+    }
+
+    // These are the four MobileGestalt capabilities required for iPadOS
+    // windowing. Do not spoof the iPad bit or DeviceClassNumber here: those also
+    // change unrelated phone UI such as the status bar and keyboard.
+    return CFEqual(property, CFSTR("MedusaFloatingLiveAppCapability")) ||
+        CFEqual(property, CFSTR("mG0AnH/Vy1veoqoLRAIgTA")) ||
+        CFEqual(property, CFSTR("MedusaOverlayAppCapability")) ||
+        CFEqual(property, CFSTR("UCG5MkVahJxG1YULbbd5Bg")) ||
+        CFEqual(property, CFSTR("MedusaPinnedAppCapability")) ||
+        CFEqual(property, CFSTR("ZYqko/XM5zD3XBfN5RmaXA")) ||
+        CFEqual(property, CFSTR("MedusaPIPCapability")) ||
+        CFEqual(property, CFSTR("nVh/gwNpy7Jv1NOk00CMrw"));
+}
+
+static BOOL shouldForceMultitaskingProperty(CFStringRef property) {
+    return (isEnhancedMultitaskingProperty(property) && !isMultitaskingModeOff()) ||
+        (isMedusaCapabilityProperty(property) && isStageManagerMode());
+}
+
+%hookf(bool, MGGetBoolAnswer, CFStringRef property) {
+    if (shouldForceMultitaskingProperty(property)) {
+        return true;
+    }
+    return %orig;
+}
+
+%hookf(CFTypeRef, MGCopyAnswer, CFStringRef property, CFDictionaryRef options) {
+    if (shouldForceMultitaskingProperty(property)) {
+        return CFRetain(kCFBooleanTrue);
+    }
+    return %orig;
+}
+
+%hookf(CFTypeRef, MGCopyAnswerWithError, CFStringRef property, CFDictionaryRef options, int *error) {
+    if (shouldForceMultitaskingProperty(property)) {
+        if (error) {
+            *error = 0;
+        }
+        return CFRetain(kCFBooleanTrue);
     }
     return %orig;
 }
 
 %ctor {
+    pref = [TPPrefsObserver new];
+    %init;
+
+    if (canInstallStageManagerSwitcherHook()) {
+        %init(TPStageManagerSwitcherHook);
+    }
+    if (canInstallStageManagerCapabilityHooks()) {
+        %init(TPStageManagerCapabilityHooks);
+    }
+
     // Unlock external display support for MDC versions
     void *sbFoundationHandle = dlopen("/System/Library/PrivateFrameworks/SpringBoardFoundation.framework/SpringBoardFoundation", RTLD_GLOBAL);
     // iOS 16.0
@@ -409,5 +562,4 @@ BOOL MGGetBoolAnswer(NSString* property);
         MSHookFunction((void *)extDisplayEnabledFunc, (void *)hookedExtDisplayEnabledFunc, NULL);
     }
 
-    pref = [TPPrefsObserver new];
 }

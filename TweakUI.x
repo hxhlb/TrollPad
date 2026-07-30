@@ -1,11 +1,13 @@
 #import "UIKitPrivate.h"
-#import <rootless.h>
 
-static BOOL forcePadKBIdiom = YES, showShortcutButtonsOnKeyboard;
+static BOOL enableiPadKeyboard = YES, forcePadKBIdiom = YES, showShortcutButtonsOnKeyboard;
 
 // Unlock iPadOS keyboard
 UIUserInterfaceIdiom UIKeyboardGetSafeDeviceIdiom();
 %hookf(UIUserInterfaceIdiom, UIKeyboardGetSafeDeviceIdiom) {
+    if (!enableiPadKeyboard) {
+        return UIUserInterfaceIdiomPhone;
+    }
     return forcePadKBIdiom ? UIUserInterfaceIdiomPad : %orig;
 }
 
@@ -82,11 +84,23 @@ UIUserInterfaceIdiom UIKeyboardGetSafeDeviceIdiom();
 %end
 
 static void loadPrefs() {
-	NSMutableDictionary *settings = [[NSMutableDictionary alloc] initWithContentsOfFile:@(ROOT_PATH("/var/mobile/Library/Preferences/com.kdt.trollpad.plist"))];
-	showShortcutButtonsOnKeyboard = [[settings objectForKey:@"TPShowShortcutButtonsOnKeyboard"] boolValue];
+    CFStringRef appID = CFSTR("com.kdt.trollpad");
+    Boolean keyExists = false;
+
+    CFPreferencesAppSynchronize(appID);
+    enableiPadKeyboard = CFPreferencesGetAppBooleanValue(CFSTR("TPEnableiPadKeyboard"), appID, &keyExists);
+    if (!keyExists) {
+        enableiPadKeyboard = YES;
+    }
+    showShortcutButtonsOnKeyboard = enableiPadKeyboard &&
+        CFPreferencesGetAppBooleanValue(CFSTR("TPShowShortcutButtonsOnKeyboard"), appID, NULL);
+}
+
+static void prefsChanged(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
+    loadPrefs();
 }
 
 %ctor {
     loadPrefs();
-    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)loadPrefs, CFSTR("com.kdt.trollpad/saved"), NULL, CFNotificationSuspensionBehaviorCoalesce);
+    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, prefsChanged, CFSTR("com.kdt.trollpad/saved"), NULL, CFNotificationSuspensionBehaviorCoalesce);
 }

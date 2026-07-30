@@ -7,8 +7,36 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Follow Control Center preserves the current behavior. Stage Manager also unlocks main-display window resizing. Respring after changing modes.</string>
 			<key>label</key>
-			<string>Stage Manager</string>
+			<string>Multitasking</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>default</key>
+			<integer>0</integer>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>defaults</key>
+			<string>com.apple.springboard</string>
+			<key>key</key>
+			<string>TPMultitaskingMode</string>
+			<key>label</key>
+			<string>Multitasking Mode</string>
+			<key>validTitles</key>
+			<array>
+				<string>Follow Control Center</string>
+				<string>Off</string>
+				<string>Stage Manager</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<integer>0</integer>
+				<integer>1</integer>
+				<integer>3</integer>
+			</array>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -79,8 +107,26 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Disable the iPadOS keyboard to restore iPhone layouts, including Chinese 9-Key.</string>
 			<key>label</key>
-			<string>Miscellaneous</string>
+			<string>Keyboard</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.kdt.trollpad</string>
+			<key>id</key>
+			<string>ENABLE_IPAD_KEYBOARD</string>
+			<key>key</key>
+			<string>TPEnableiPadKeyboard</string>
+			<key>label</key>
+			<string>Enable iPadOS Keyboard</string>
+			<key>PostNotification</key>
+			<string>com.kdt.trollpad/saved</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -89,10 +135,20 @@
 			<false/>
 			<key>defaults</key>
 			<string>com.kdt.trollpad</string>
+			<key>id</key>
+			<string>SHOW_SHORTCUT_BUTTONS</string>
 			<key>key</key>
 			<string>TPShowShortcutButtonsOnKeyboard</string>
 			<key>label</key>
 			<string>Show shortcut buttons on keyboard</string>
+			<key>PostNotification</key>
+			<string>com.kdt.trollpad/saved</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Miscellaneous</string>
 		</dict>
 		<dict>
 			<key>cell</key>

@@ -14,7 +14,6 @@ TrollPadSB_LIBRARIES = MobileGestalt
 
 TrollPadUI_FILES = TweakUI.x
 TrollPadUI_CFLAGS = -fobjc-arc
-TrollPadUI_LIBRARIES = root
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 SUBPROJECTS += TrollPadPrefs

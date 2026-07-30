@@ -9,6 +9,7 @@
     [self observeKey:@"TPUseiPadAppSwitchingAnimation"];
     [self observeKey:@"TPIsFloatingDockSupported"];
     [self observeKey:@"TPScaleGridSwitcher"];
+    [self observeKey:@"TPMultitaskingMode"];
     // Fetch keys
     [self observeValueForKeyPath:nil ofObject:nil change:nil context:nil];
     return self;
@@ -30,5 +31,6 @@ keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)contex
     self.useiPadAppSwitchingAnimation = [defaults boolForKey:@"TPUseiPadAppSwitchingAnimation"];
     self.isFloatingDockSupported = [defaults boolForKey:@"TPIsFloatingDockSupported"];
     self.scaleGridSwitcher = [defaults boolForKey:@"TPScaleGridSwitcher"];
+    self.multitaskingMode = [defaults integerForKey:@"TPMultitaskingMode"];
 }
 @end

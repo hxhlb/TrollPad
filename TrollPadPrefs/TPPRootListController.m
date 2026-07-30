@@ -4,14 +4,33 @@
 
 #define PREF_PATH @"/var/mobile/Library/Preferences/com.kdt.trollpad.plist"
 
+static NSString *const TPEnableiPadKeyboardKey = @"TPEnableiPadKeyboard";
+static NSString *const TPEnableiPadKeyboardSpecifierID = @"ENABLE_IPAD_KEYBOARD";
+static NSString *const TPShowShortcutButtonsSpecifierID = @"SHOW_SHORTCUT_BUTTONS";
+
 @implementation TPPRootListController
 
 - (NSArray *)specifiers {
     if (!_specifiers) {
         _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
         self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Respring" style:UIBarButtonItemStylePlain target:self action:@selector(respring)];
+
+        PSSpecifier *enableiPadKeyboardSpecifier = [self specifierForID:TPEnableiPadKeyboardSpecifierID];
+        PSSpecifier *shortcutButtonsSpecifier = [self specifierForID:TPShowShortcutButtonsSpecifierID];
+        BOOL enableiPadKeyboard = [[self readPreferenceValue:enableiPadKeyboardSpecifier] boolValue];
+        [shortcutButtonsSpecifier setProperty:@(enableiPadKeyboard) forKey:PSEnabledKey];
     }
     return _specifiers;
+}
+
+- (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
+    [super setPreferenceValue:value specifier:specifier];
+
+    if ([[specifier propertyForKey:PSKeyNameKey] isEqualToString:TPEnableiPadKeyboardKey]) {
+        PSSpecifier *shortcutButtonsSpecifier = [self specifierForID:TPShowShortcutButtonsSpecifierID];
+        [shortcutButtonsSpecifier setProperty:@([value boolValue]) forKey:PSEnabledKey];
+        [self reloadSpecifier:shortcutButtonsSpecifier animated:YES];
+    }
 }
 
 - (void)openDisplayArrangement {
