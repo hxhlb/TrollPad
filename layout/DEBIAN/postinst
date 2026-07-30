@@ -1,21 +1,33 @@
 #!/bin/sh
 
 set -e
-jb_root_path=$(realpath $HOME/../..)
+
+jb_root_path=$(realpath "$HOME/../..")
+
 bundle_system=/System/Library/ControlCenter/Bundles/ContinuousExposeModule.bundle
-bundle_jb=$jb_root_path/Library/ControlCenter/Bundles/ContinuousExposeModule.bundle
-plistbuddy=$jb_root_path/usr/libexec/PlistBuddy
+if [ -d /rootfs/System/Library/ControlCenter/Bundles/ContinuousExposeModule.bundle ]; then
+	bundle_system=/rootfs/System/Library/ControlCenter/Bundles/ContinuousExposeModule.bundle
+fi
+bundle_jb="$jb_root_path/Library/ControlCenter/Bundles/ContinuousExposeModule.bundle"
+bundle_info="$bundle_jb/Info.plist"
+plistbuddy="$jb_root_path/usr/libexec/PlistBuddy"
 
 case "$1" in
 	(configure)
-	if [ -d $bundle_system ] ; then
-		# Copy Stage Manager CC module
-		ln -sf $bundle_system/* $bundle_jb/
-		rm $bundle_jb/Info.plist
-		cp $bundle_system/Info.plist $bundle_jb/Info.plist
-		$plistbuddy -c "Delete :SBIconVisibilityDefaultVisible" $bundle_jb/Info.plist
-		$plistbuddy -c "Delete :SBIconVisibilitySetByAppPreference" $bundle_jb/Info.plist
-		$plistbuddy -c "Add :UIDeviceFamily:0 integer 1" $bundle_jb/Info.plist
+	if [ -d "$bundle_system" ] && [ -x "$plistbuddy" ]; then
+		mkdir -p "$bundle_jb"
+		ln -sf "$bundle_system"/* "$bundle_jb/"
+		rm -f "$bundle_info"
+		cp "$bundle_system/Info.plist" "$bundle_info"
+
+		# These keys are not present on every iOS version.
+		"$plistbuddy" -c "Delete :SBIconVisibilityDefaultVisible" "$bundle_info" >/dev/null 2>&1 || :
+		"$plistbuddy" -c "Delete :SBIconVisibilitySetByAppPreference" "$bundle_info" >/dev/null 2>&1 || :
+		"$plistbuddy" -c "Delete :UIDeviceFamily" "$bundle_info" >/dev/null 2>&1 || :
+		"$plistbuddy" -c "Add :UIDeviceFamily array" "$bundle_info"
+		"$plistbuddy" -c "Add :UIDeviceFamily:0 integer 1" "$bundle_info"
+	else
+		echo "TrollPad: Stage Manager Control Center module unavailable; skipping installation" >&2
 	fi
 	;;
 	(abort-upgrade|abort-remove|abort-deconfigure)
