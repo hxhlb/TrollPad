@@ -10,6 +10,7 @@
     [self observeKey:@"TPIsFloatingDockSupported"];
     [self observeKey:@"TPScaleGridSwitcher"];
     [self observeKey:@"TPMultitaskingMode"];
+    [self observeKey:@"TPStageManagerSide"];
     // Fetch keys
     [self observeValueForKeyPath:nil ofObject:nil change:nil context:nil];
     return self;
@@ -32,5 +33,6 @@ keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)contex
     self.isFloatingDockSupported = [defaults boolForKey:@"TPIsFloatingDockSupported"];
     self.scaleGridSwitcher = [defaults boolForKey:@"TPScaleGridSwitcher"];
     self.multitaskingMode = [defaults integerForKey:@"TPMultitaskingMode"];
+    self.stageManagerSide = [defaults integerForKey:@"TPStageManagerSide"];
 }
 @end

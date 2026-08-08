@@ -8,7 +8,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>Follow Control Center preserves the current behavior. Stage Manager also unlocks main-display window resizing. Respring after changing modes.</string>
+			<string>Follow Control Center preserves the current behavior. Stage Manager also unlocks main-display window resizing. Respring after changing modes or the Stage Manager side.</string>
 			<key>label</key>
 			<string>Multitasking</string>
 		</dict>
@@ -23,6 +23,8 @@
 			<string>com.apple.springboard</string>
 			<key>key</key>
 			<string>TPMultitaskingMode</string>
+			<key>id</key>
+			<string>MULTITASKING_MODE</string>
 			<key>label</key>
 			<string>Multitasking Mode</string>
 			<key>validTitles</key>
@@ -36,6 +38,32 @@
 				<integer>0</integer>
 				<integer>1</integer>
 				<integer>3</integer>
+			</array>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>default</key>
+			<integer>0</integer>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>defaults</key>
+			<string>com.apple.springboard</string>
+			<key>id</key>
+			<string>STAGE_MANAGER_SIDE</string>
+			<key>key</key>
+			<string>TPStageManagerSide</string>
+			<key>label</key>
+			<string>Stage Manager Side</string>
+			<key>validTitles</key>
+			<array>
+				<string>Left</string>
+				<string>Right</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<integer>0</integer>
+				<integer>1</integer>
 			</array>
 		</dict>
 		<dict>

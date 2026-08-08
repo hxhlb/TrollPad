@@ -7,6 +7,10 @@
 static NSString *const TPEnableiPadKeyboardKey = @"TPEnableiPadKeyboard";
 static NSString *const TPEnableiPadKeyboardSpecifierID = @"ENABLE_IPAD_KEYBOARD";
 static NSString *const TPShowShortcutButtonsSpecifierID = @"SHOW_SHORTCUT_BUTTONS";
+static NSString *const TPMultitaskingModeKey = @"TPMultitaskingMode";
+static NSString *const TPMultitaskingModeSpecifierID = @"MULTITASKING_MODE";
+static NSString *const TPStageManagerSideSpecifierID = @"STAGE_MANAGER_SIDE";
+static NSInteger const TPMultitaskingModeStageManager = 3;
 
 @implementation TPPRootListController
 
@@ -19,6 +23,11 @@ static NSString *const TPShowShortcutButtonsSpecifierID = @"SHOW_SHORTCUT_BUTTON
         PSSpecifier *shortcutButtonsSpecifier = [self specifierForID:TPShowShortcutButtonsSpecifierID];
         BOOL enableiPadKeyboard = [[self readPreferenceValue:enableiPadKeyboardSpecifier] boolValue];
         [shortcutButtonsSpecifier setProperty:@(enableiPadKeyboard) forKey:PSEnabledKey];
+
+        PSSpecifier *multitaskingModeSpecifier = [self specifierForID:TPMultitaskingModeSpecifierID];
+        PSSpecifier *stageManagerSideSpecifier = [self specifierForID:TPStageManagerSideSpecifierID];
+        NSInteger multitaskingMode = [[self readPreferenceValue:multitaskingModeSpecifier] integerValue];
+        [stageManagerSideSpecifier setProperty:@(multitaskingMode == TPMultitaskingModeStageManager) forKey:PSEnabledKey];
     }
     return _specifiers;
 }
@@ -30,6 +39,12 @@ static NSString *const TPShowShortcutButtonsSpecifierID = @"SHOW_SHORTCUT_BUTTON
         PSSpecifier *shortcutButtonsSpecifier = [self specifierForID:TPShowShortcutButtonsSpecifierID];
         [shortcutButtonsSpecifier setProperty:@([value boolValue]) forKey:PSEnabledKey];
         [self reloadSpecifier:shortcutButtonsSpecifier animated:YES];
+    }
+
+    if ([[specifier propertyForKey:PSKeyNameKey] isEqualToString:TPMultitaskingModeKey]) {
+        PSSpecifier *stageManagerSideSpecifier = [self specifierForID:TPStageManagerSideSpecifierID];
+        [stageManagerSideSpecifier setProperty:@([value integerValue] == TPMultitaskingModeStageManager) forKey:PSEnabledKey];
+        [self reloadSpecifier:stageManagerSideSpecifier animated:YES];
     }
 }
 

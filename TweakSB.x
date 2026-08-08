@@ -26,6 +26,16 @@ typedef NS_ENUM(NSInteger, TPMultitaskingMode) {
     TPMultitaskingModeStageManager = 3,
 };
 
+typedef NS_ENUM(NSInteger, TPStageManagerSide) {
+    TPStageManagerSideLeft = 0,
+    TPStageManagerSideRight = 1,
+};
+
+typedef struct {
+    double leadingAlpha;
+    double trailingAlpha;
+} TPSwitcherGradientWallpaperAttributes;
+
 static BOOL isMultitaskingModeOff() {
     return pref.multitaskingMode == TPMultitaskingModeOff;
 }
@@ -33,6 +43,27 @@ static BOOL isMultitaskingModeOff() {
 static BOOL isStageManagerMode() {
     return pref.multitaskingMode == TPMultitaskingModeStageManager;
 }
+
+static BOOL shouldUseRightStageManagerSide() {
+    return isStageManagerMode() && pref.stageManagerSide == TPStageManagerSideRight;
+}
+
+static BOOL isContinuousExposeObject(id object) {
+    return [NSStringFromClass(object_getClass(object)) containsString:@"ContinuousExpose"];
+}
+
+static __thread NSUInteger forceStageManagerRightToLeft = 0;
+
+#define TPBeginStageManagerRightToLeft() \
+    BOOL tpShouldForceStageManagerRightToLeft = shouldUseRightStageManagerSide() && isContinuousExposeObject(self); \
+    if (tpShouldForceStageManagerRightToLeft) { \
+        forceStageManagerRightToLeft++; \
+    }
+
+#define TPEndStageManagerRightToLeft() \
+    if (tpShouldForceStageManagerRightToLeft) { \
+        forceStageManagerRightToLeft--; \
+    }
 
 static BOOL canInstallStageManagerSwitcherHook() {
     Class switcherControllerClass = objc_getClass("SBSwitcherController");
@@ -52,6 +83,21 @@ static BOOL canInstallStageManagerCapabilityHooks() {
         class_getInstanceMethod(applicationClass, @selector(supportsChamoisSceneResizing)) &&
         class_getInstanceMethod(applicationClass, @selector(supportsChamoisViewResizing)) &&
         class_getInstanceMethod(applicationClass, @selector(alwaysMaximizedInChamois));
+}
+
+static BOOL canInstallStageManagerSideHooks() {
+    Class switcherModifierClass = objc_getClass("SBSwitcherModifier");
+    Class stripModifierClass = objc_getClass("SBStripContinuousExposeSwitcherModifier");
+
+    if (switcherModifierClass) {
+        (void)[(id)switcherModifierClass class];
+    }
+
+    return switcherModifierClass &&
+        class_getInstanceMethod(switcherModifierClass, @selector(isRTLEnabled)) &&
+        stripModifierClass &&
+        class_getInstanceMethod(stripModifierClass, @selector(_appStripOriginX)) &&
+        class_getInstanceMethod(UIApplication.class, @selector(userInterfaceLayoutDirection));
 }
 
 // Since some methods explicitly check for user interface idiom, I have no better way to fool them
@@ -319,6 +365,10 @@ static uint16_t forcePadIdiom = 0;
 %end
 
 %hook UIApplication
+- (UIUserInterfaceLayoutDirection)userInterfaceLayoutDirection {
+    return forceStageManagerRightToLeft > 0 ? UIUserInterfaceLayoutDirectionRightToLeft : %orig;
+}
+
 - (id)_defaultSupportedInterfaceOrientations {
     forcePadIdiom++;
     id result = %orig;
@@ -409,6 +459,192 @@ static uint16_t forcePadIdiom = 0;
 
 - (BOOL)alwaysMaximizedInChamois {
     return isStageManagerMode() ? NO : %orig;
+}
+%end
+%end
+
+%group TPStageManagerSideHooks
+%hook SBSwitcherModifier
+- (BOOL)isRTLEnabled {
+    if (shouldUseRightStageManagerSide() && isContinuousExposeObject(self)) {
+        return YES;
+    }
+    return %orig;
+}
+
+- (CGRect)scaledFrameForLayoutRole:(NSInteger)layoutRole inAppLayout:(id)appLayout atIndex:(NSUInteger)index {
+    TPBeginStageManagerRightToLeft();
+    CGRect result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+%end
+
+%hook SBFluidSwitcherGestureManager
+- (NSUInteger)_continuousExposeStripEdge {
+    return shouldUseRightStageManagerSide() ? UIRectEdgeRight : %orig;
+}
+%end
+
+%hook SBContinuousExposeAutoLayoutController
+- (id)spaceByPerformingAutoLayoutWithSpace:(id)space previousSpace:(id)previousSpace configuration:(id)configuration options:(NSUInteger)options {
+    TPBeginStageManagerRightToLeft();
+    id result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+%end
+
+%hook SBContinuousExposeAppToInlineAppExposeSwitcherModifier
+- (CGRect)frameForIndex:(NSUInteger)index {
+    TPBeginStageManagerRightToLeft();
+    CGRect result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+%end
+
+%hook SBContinuousExposeFullScreenCrossblurTransitionSwitcherModifier
+- (CGPoint)anchorPointForIndex:(NSUInteger)index {
+    TPBeginStageManagerRightToLeft();
+    CGPoint result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (double)perspectiveAngleForAppLayout:(id)appLayout {
+    TPBeginStageManagerRightToLeft();
+    double result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+%end
+
+%hook SBContinuousExposeHomeGestureSwitcherModifier
+- (void)_updateTranslationAdjustmentForGestureFromHomeScreenIfNeededWithEvent:(id)event {
+    TPBeginStageManagerRightToLeft();
+    %orig;
+    TPEndStageManagerRightToLeft();
+}
+
+- (CGRect)frameForIndex:(NSUInteger)index {
+    TPBeginStageManagerRightToLeft();
+    CGRect result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (double)perspectiveAngleForAppLayout:(id)appLayout {
+    TPBeginStageManagerRightToLeft();
+    double result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (double)_rangeForPerspectiveAngleProgressOfAppLayout:(id)appLayout outMin:(double)minimum outMax:(double)maximum {
+    TPBeginStageManagerRightToLeft();
+    double result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (double)_maxPerspectiveAngleForSelectedAppLayout {
+    TPBeginStageManagerRightToLeft();
+    double result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+%end
+
+%hook SBFullScreenContinuousExposeSwitcherModifier
+- (unsigned int)_continuousExposeStripEdge {
+    TPBeginStageManagerRightToLeft();
+    unsigned int result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+%end
+
+%hook SBInlineAppExposeContinuousExposeSwitcherModifier
+- (CGRect)frameForIndex:(NSUInteger)index {
+    TPBeginStageManagerRightToLeft();
+    CGRect result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (CGRect)frameForLayoutRole:(NSInteger)layoutRole inAppLayout:(id)appLayout withBounds:(CGRect)bounds {
+    TPBeginStageManagerRightToLeft();
+    CGRect result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (CGRect)_inlineAppExposeSwitcherFrame {
+    TPBeginStageManagerRightToLeft();
+    CGRect result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+%end
+
+%hook SBRevealContinuousExposeStripOverflowGestureModifier
+- (CGRect)frameForIndex:(NSUInteger)index {
+    TPBeginStageManagerRightToLeft();
+    CGRect result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+%end
+
+%hook SBStripContinuousExposeSwitcherModifier
+- (CGPoint)anchorPointForIndex:(NSUInteger)index {
+    TPBeginStageManagerRightToLeft();
+    CGPoint result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (CGPoint)adjustedSpaceAccessoryViewAnchorPoint:(CGPoint)anchorPoint forAppLayout:(id)appLayout {
+    TPBeginStageManagerRightToLeft();
+    CGPoint result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (TPSwitcherGradientWallpaperAttributes)wallpaperGradientAttributesForIndex:(NSUInteger)index {
+    TPBeginStageManagerRightToLeft();
+    TPSwitcherGradientWallpaperAttributes result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (double)perspectiveAngleForAppLayout:(id)appLayout {
+    TPBeginStageManagerRightToLeft();
+    double result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (double)_appStripOriginX {
+    TPBeginStageManagerRightToLeft();
+    double result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (CGRect)_stripFrame {
+    TPBeginStageManagerRightToLeft();
+    CGRect result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (CGRect)_cachedOrFallbackFrameForIndex:(NSUInteger)index cacheValidityToken:(id)token {
+    TPBeginStageManagerRightToLeft();
+    CGRect result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
 }
 %end
 %end
@@ -548,6 +784,9 @@ static BOOL shouldForceMultitaskingProperty(CFStringRef property) {
     }
     if (canInstallStageManagerCapabilityHooks()) {
         %init(TPStageManagerCapabilityHooks);
+    }
+    if (canInstallStageManagerSideHooks()) {
+        %init(TPStageManagerSideHooks);
     }
 
     // Unlock external display support for MDC versions
