@@ -8,7 +8,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>Follow Control Center preserves the current behavior. Stage Manager also unlocks main-display window resizing. Respring after changing modes or the Stage Manager side.</string>
+			<string>Follow Control Center preserves the current behavior. Stage Manager also unlocks main-display window resizing. When Stage Manager is on the right, Mirror App Switcher reverses the app switcher and its transitions. Respring after changing these options.</string>
 			<key>label</key>
 			<string>Multitasking</string>
 		</dict>
@@ -65,6 +65,20 @@
 				<integer>0</integer>
 				<integer>1</integer>
 			</array>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.apple.springboard</string>
+			<key>id</key>
+			<string>MIRROR_STAGE_MANAGER_SWITCHER</string>
+			<key>key</key>
+			<string>TPMirrorStageManagerSwitcher</string>
+			<key>label</key>
+			<string>Mirror App Switcher</string>
 		</dict>
 		<dict>
 			<key>cell</key>

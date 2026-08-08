@@ -48,14 +48,34 @@ static BOOL shouldUseRightStageManagerSide() {
     return isStageManagerMode() && pref.stageManagerSide == TPStageManagerSideRight;
 }
 
+static BOOL shouldMirrorStageManagerSwitcher() {
+    return shouldUseRightStageManagerSide() && pref.mirrorStageManagerSwitcher;
+}
+
 static BOOL isContinuousExposeObject(id object) {
     return [NSStringFromClass(object_getClass(object)) containsString:@"ContinuousExpose"];
+}
+
+static BOOL isStageManagerAppSwitcherObject(id object) {
+    NSString *className = NSStringFromClass(object_getClass(object));
+    return [className isEqualToString:@"SBAppSwitcherContinuousExposeSwitcherModifier"] ||
+        [className isEqualToString:@"SBContinuousExposeHomeGestureSwitcherModifier"] ||
+        [className isEqualToString:@"SBContinuousExposeSwitcherToAppModifier"] ||
+        [className isEqualToString:@"SBContinuousExposeToHomeSwitcherModifier"] ||
+        [className isEqualToString:@"SBHomeToGridSwitcherModifier"];
+}
+
+static BOOL shouldForceStageManagerRightToLeft(id object) {
+    if (isStageManagerAppSwitcherObject(object)) {
+        return shouldMirrorStageManagerSwitcher();
+    }
+    return isContinuousExposeObject(object) && shouldUseRightStageManagerSide();
 }
 
 static __thread NSUInteger forceStageManagerRightToLeft = 0;
 
 #define TPBeginStageManagerRightToLeft() \
-    BOOL tpShouldForceStageManagerRightToLeft = shouldUseRightStageManagerSide() && isContinuousExposeObject(self); \
+    BOOL tpShouldForceStageManagerRightToLeft = shouldForceStageManagerRightToLeft(self); \
     if (tpShouldForceStageManagerRightToLeft) { \
         forceStageManagerRightToLeft++; \
     }
@@ -98,6 +118,14 @@ static BOOL canInstallStageManagerSideHooks() {
         stripModifierClass &&
         class_getInstanceMethod(stripModifierClass, @selector(_appStripOriginX)) &&
         class_getInstanceMethod(UIApplication.class, @selector(userInterfaceLayoutDirection));
+}
+
+static BOOL canInstallStageManagerSwitcherTransitionHooks() {
+    Class switcherToAppModifierClass = objc_getClass("SBContinuousExposeSwitcherToAppModifier");
+
+    return switcherToAppModifierClass &&
+        class_getInstanceMethod(switcherToAppModifierClass, @selector(frameForIndex:)) &&
+        class_getInstanceMethod(switcherToAppModifierClass, @selector(contentOffsetForIndex:alignment:));
 }
 
 // Since some methods explicitly check for user interface idiom, I have no better way to fool them
@@ -466,7 +494,7 @@ static uint16_t forcePadIdiom = 0;
 %group TPStageManagerSideHooks
 %hook SBSwitcherModifier
 - (BOOL)isRTLEnabled {
-    if (shouldUseRightStageManagerSide() && isContinuousExposeObject(self)) {
+    if (shouldForceStageManagerRightToLeft(self)) {
         return YES;
     }
     return %orig;
@@ -649,6 +677,24 @@ static uint16_t forcePadIdiom = 0;
 %end
 %end
 
+%group TPStageManagerSwitcherTransitionHooks
+%hook SBContinuousExposeSwitcherToAppModifier
+- (CGRect)frameForIndex:(NSUInteger)index {
+    TPBeginStageManagerRightToLeft();
+    CGRect result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+
+- (CGPoint)contentOffsetForIndex:(NSUInteger)index alignment:(NSInteger)alignment {
+    TPBeginStageManagerRightToLeft();
+    CGPoint result = %orig;
+    TPEndStageManagerRightToLeft();
+    return result;
+}
+%end
+%end
+
 %hook SBApplication
 - (BOOL)isMedusaCapable {
     return isMultitaskingModeOff() ? %orig :
@@ -787,6 +833,9 @@ static BOOL shouldForceMultitaskingProperty(CFStringRef property) {
     }
     if (canInstallStageManagerSideHooks()) {
         %init(TPStageManagerSideHooks);
+    }
+    if (canInstallStageManagerSwitcherTransitionHooks()) {
+        %init(TPStageManagerSwitcherTransitionHooks);
     }
 
     // Unlock external display support for MDC versions

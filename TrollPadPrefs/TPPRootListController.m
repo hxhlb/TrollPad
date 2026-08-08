@@ -9,8 +9,11 @@ static NSString *const TPEnableiPadKeyboardSpecifierID = @"ENABLE_IPAD_KEYBOARD"
 static NSString *const TPShowShortcutButtonsSpecifierID = @"SHOW_SHORTCUT_BUTTONS";
 static NSString *const TPMultitaskingModeKey = @"TPMultitaskingMode";
 static NSString *const TPMultitaskingModeSpecifierID = @"MULTITASKING_MODE";
+static NSString *const TPStageManagerSideKey = @"TPStageManagerSide";
 static NSString *const TPStageManagerSideSpecifierID = @"STAGE_MANAGER_SIDE";
+static NSString *const TPMirrorStageManagerSwitcherSpecifierID = @"MIRROR_STAGE_MANAGER_SWITCHER";
 static NSInteger const TPMultitaskingModeStageManager = 3;
+static NSInteger const TPStageManagerSideRight = 1;
 
 @implementation TPPRootListController
 
@@ -26,8 +29,11 @@ static NSInteger const TPMultitaskingModeStageManager = 3;
 
         PSSpecifier *multitaskingModeSpecifier = [self specifierForID:TPMultitaskingModeSpecifierID];
         PSSpecifier *stageManagerSideSpecifier = [self specifierForID:TPStageManagerSideSpecifierID];
+        PSSpecifier *mirrorStageManagerSwitcherSpecifier = [self specifierForID:TPMirrorStageManagerSwitcherSpecifierID];
         NSInteger multitaskingMode = [[self readPreferenceValue:multitaskingModeSpecifier] integerValue];
+        NSInteger stageManagerSide = [[self readPreferenceValue:stageManagerSideSpecifier] integerValue];
         [stageManagerSideSpecifier setProperty:@(multitaskingMode == TPMultitaskingModeStageManager) forKey:PSEnabledKey];
+        [mirrorStageManagerSwitcherSpecifier setProperty:@(multitaskingMode == TPMultitaskingModeStageManager && stageManagerSide == TPStageManagerSideRight) forKey:PSEnabledKey];
     }
     return _specifiers;
 }
@@ -43,8 +49,20 @@ static NSInteger const TPMultitaskingModeStageManager = 3;
 
     if ([[specifier propertyForKey:PSKeyNameKey] isEqualToString:TPMultitaskingModeKey]) {
         PSSpecifier *stageManagerSideSpecifier = [self specifierForID:TPStageManagerSideSpecifierID];
+        PSSpecifier *mirrorStageManagerSwitcherSpecifier = [self specifierForID:TPMirrorStageManagerSwitcherSpecifierID];
+        NSInteger stageManagerSide = [[self readPreferenceValue:stageManagerSideSpecifier] integerValue];
         [stageManagerSideSpecifier setProperty:@([value integerValue] == TPMultitaskingModeStageManager) forKey:PSEnabledKey];
+        [mirrorStageManagerSwitcherSpecifier setProperty:@([value integerValue] == TPMultitaskingModeStageManager && stageManagerSide == TPStageManagerSideRight) forKey:PSEnabledKey];
         [self reloadSpecifier:stageManagerSideSpecifier animated:YES];
+        [self reloadSpecifier:mirrorStageManagerSwitcherSpecifier animated:YES];
+    }
+
+    if ([[specifier propertyForKey:PSKeyNameKey] isEqualToString:TPStageManagerSideKey]) {
+        PSSpecifier *multitaskingModeSpecifier = [self specifierForID:TPMultitaskingModeSpecifierID];
+        PSSpecifier *mirrorStageManagerSwitcherSpecifier = [self specifierForID:TPMirrorStageManagerSwitcherSpecifierID];
+        NSInteger multitaskingMode = [[self readPreferenceValue:multitaskingModeSpecifier] integerValue];
+        [mirrorStageManagerSwitcherSpecifier setProperty:@(multitaskingMode == TPMultitaskingModeStageManager && [value integerValue] == TPStageManagerSideRight) forKey:PSEnabledKey];
+        [self reloadSpecifier:mirrorStageManagerSwitcherSpecifier animated:YES];
     }
 }
 
