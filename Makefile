@@ -2,6 +2,12 @@ ARCHS := arm64 arm64e
 TARGET := iphone:clang:16.5:15.0
 INSTALL_TARGET_PROCESSES = SpringBoard
 
+ifeq ($(THEOS_PACKAGE_SCHEME),rootless)
+THEOS_LAYOUT_DIR_NAME := layout-rootless
+else ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
+THEOS_LAYOUT_DIR_NAME := layout-roothide
+endif
+
 include $(THEOS)/makefiles/common.mk
 # TARGET_CODESIGN = fastPathSign
 

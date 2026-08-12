@@ -2,10 +2,12 @@
 
 set -e
 
+jb_root_path=/var/jb
+
 bundle_system=/System/Library/ControlCenter/Bundles/ContinuousExposeModule.bundle
-bundle_jb=/Library/ControlCenter/Bundles/ContinuousExposeModule.bundle
+bundle_jb="$jb_root_path/Library/ControlCenter/Bundles/ContinuousExposeModule.bundle"
 bundle_info="$bundle_jb/Info.plist"
-plistbuddy=/usr/libexec/PlistBuddy
+plistbuddy="$jb_root_path/usr/libexec/PlistBuddy"
 
 case "$1" in
 	(configure)

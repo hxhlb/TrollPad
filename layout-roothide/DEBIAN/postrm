@@ -1,0 +1,14 @@
+#!/bin/sh
+
+set -e
+
+jb_root_path=$(realpath "$HOME/../..")
+bundle_jb="$jb_root_path/Library/ControlCenter/Bundles/ContinuousExposeModule.bundle"
+
+case "$1" in
+	(remove)
+	rm -rf "$bundle_jb"
+	;;
+esac
+
+exit 0

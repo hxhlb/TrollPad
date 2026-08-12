@@ -2,7 +2,7 @@
 
 set -e
 
-bundle_jb=/Library/ControlCenter/Bundles/ContinuousExposeModule.bundle
+bundle_jb=/var/jb/Library/ControlCenter/Bundles/ContinuousExposeModule.bundle
 
 case "$1" in
 	(remove)
