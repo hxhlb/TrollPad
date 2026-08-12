@@ -19,12 +19,21 @@
 #endif
 
 static TPPrefsObserver* pref;
+static BOOL trollPadEnabled;
 
-typedef NS_ENUM(NSInteger, TPWindowingMode) {
-    TPWindowingModeOff = 0,
-    TPWindowingModeSplitView = 1,
-    TPWindowingModeStageManager = 2,
-};
+static void loadTrollPadEnabled() {
+    Boolean keyExists = false;
+    CFPreferencesAppSynchronize(CFSTR("com.kdt.trollpad"));
+    trollPadEnabled = CFPreferencesGetAppBooleanValue(
+        CFSTR("TPTrollPadEnabled"), CFSTR("com.kdt.trollpad"), &keyExists);
+    if (!keyExists) {
+        trollPadEnabled = YES;
+    }
+}
+
+static void trollPadPrefsChanged(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
+    loadTrollPadEnabled();
+}
 
 typedef NS_ENUM(NSInteger, TPStageManagerSide) {
     TPStageManagerSideLeft = 0,
@@ -36,44 +45,33 @@ typedef struct {
     double trailingAlpha;
 } TPSwitcherGradientWallpaperAttributes;
 
-static TPWindowingMode windowingMode() {
-    switch (pref.windowingMode) {
-        case TPWindowingModeOff:
-        case TPWindowingModeSplitView:
-        case TPWindowingModeStageManager:
-            return pref.windowingMode;
-        default:
-            return TPWindowingModeStageManager;
-    }
-}
-
-static BOOL isControlCenterStageManagerEnabled() {
+static BOOL isStageManagerEnabled() {
     id value = [NSUserDefaults.standardUserDefaults objectForKey:@"SBChamoisWindowingEnabled"];
     return value ? [value boolValue] : NO;
 }
 
-static BOOL isWindowingModeOff() {
-    return windowingMode() == TPWindowingModeOff;
-}
-
-static BOOL isWindowingEnabledByControlCenter() {
-    return isControlCenterStageManagerEnabled() && !isWindowingModeOff();
-}
-
-static BOOL isStageManagerMode() {
-    return windowingMode() == TPWindowingModeStageManager;
+static BOOL isMultitaskingActive() {
+    if (!trollPadEnabled) {
+        return NO;
+    }
+    if (@available(iOS 17.0, *)) {
+        id medusa = [NSUserDefaults.standardUserDefaults objectForKey:@"SBMedusaMultitaskingEnabled"];
+        BOOL medusaEnabled = medusa ? [medusa boolValue] : YES;
+        return medusaEnabled || isStageManagerEnabled();
+    }
+    return YES;
 }
 
 static BOOL isStageManagerActive() {
-    return isControlCenterStageManagerEnabled() && isStageManagerMode();
+    return trollPadEnabled && isStageManagerEnabled();
 }
 
 static BOOL shouldUseRightStageManagerSide() {
-    return isStageManagerMode() && pref.stageManagerSide == TPStageManagerSideRight;
+    return isStageManagerActive() && pref.stageManagerSide == TPStageManagerSideRight;
 }
 
-static BOOL shouldMirrorStageManagerSwitcher() {
-    return shouldUseRightStageManagerSide() && pref.mirrorStageManagerSwitcher;
+static BOOL shouldMirrorAppSwitcher() {
+    return trollPadEnabled && pref.mirrorAppSwitcher;
 }
 
 static BOOL isContinuousExposeObject(id object) {
@@ -91,7 +89,7 @@ static BOOL isStageManagerAppSwitcherObject(id object) {
 
 static BOOL shouldForceStageManagerRightToLeft(id object) {
     if (isStageManagerAppSwitcherObject(object)) {
-        return shouldMirrorStageManagerSwitcher();
+        return shouldMirrorAppSwitcher();
     }
     return isContinuousExposeObject(object) && shouldUseRightStageManagerSide();
 }
@@ -159,6 +157,9 @@ static uint16_t forcePadIdiom = 0;
 
 %hook UIDevice
 - (UIUserInterfaceIdiom)userInterfaceIdiom {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     // Ever wondered how I obtained those random functions to hook? This is my way
 #ifdef DEBUG_LOG_IDIOM
     {
@@ -217,6 +218,9 @@ static uint16_t forcePadIdiom = 0;
 // Fix status bar for the external display
 %hook _UIStatusBar
 - (void)_prepareVisualProviderIfNeeded {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     UIScreen *screen = self.targetScreen ?: self._effectiveTargetScreen;
     if (screen._isExternal) {
         // For performance reason, we're gonna overwrite userInterfaceIdiom directly
@@ -231,6 +235,9 @@ static uint16_t forcePadIdiom = 0;
 %end
 %hook UIStatusBarWindow
 - (void)setStatusBar:(UIStatusBar *)statusBar {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     if (self.windowScene.screen._isExternal) {
         statusBar.statusBar.targetScreen = self.windowScene.screen;
     }
@@ -251,6 +258,9 @@ static uint16_t forcePadIdiom = 0;
 // Enable Medusa multitasking (three-dots) button on top
 %hook SBFullScreenSwitcherLiveContentOverlayCoordinator
 -(void)layoutStateTransitionCoordinator:(id)arg1 transitionDidBeginWithTransitionContext:(id)arg2 {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     forcePadIdiom++;
     %orig;
     forcePadIdiom--;
@@ -269,6 +279,9 @@ static uint16_t forcePadIdiom = 0;
 // Fix iOS 16 multitasking (split screen, slide over, stage manager)
 %hook SBMainSwitcherControllerCoordinator
 - (void)_loadContentViewControllerIfNecessaryForWindowScene:(id)scene {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     forcePadIdiom++;
     %orig;
     forcePadIdiom--;
@@ -278,6 +291,9 @@ static uint16_t forcePadIdiom = 0;
 // Fix iOS 18 app switcher animation
 %hook SBSwitcherController
 - (void)_updateContentViewControllerIfNeeded {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     forcePadIdiom++;
     %orig;
     forcePadIdiom--;
@@ -287,20 +303,13 @@ static uint16_t forcePadIdiom = 0;
 %group TPStageManagerSwitcherHook
 %hook SBSwitcherController
 - (NSUInteger)windowManagementStyle {
-    if (!isControlCenterStageManagerEnabled()) {
+    if (!trollPadEnabled) {
         return %orig;
     }
-
-    switch (windowingMode()) {
-        case TPWindowingModeOff:
-            return 0;
-        case TPWindowingModeSplitView:
-            return 1;
-        case TPWindowingModeStageManager:
-            return 2;
-        default:
-            return %orig;
+    if (isStageManagerActive()) {
+        return 2;
     }
+    return isMultitaskingActive() ? 1 : 0;
 }
 %end
 %end
@@ -308,6 +317,9 @@ static uint16_t forcePadIdiom = 0;
 // Min width and height are 150, smaller may crash the app
 %hook SBSwitcherChamoisLayoutAttributes
 - (void)setGridWidths:(NSArray<NSNumber *> *)values {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     NSUInteger maxValue = values.lastObject.unsignedIntValue;
     NSMutableArray *array = [NSMutableArray array];
     for (int i = 150; i < maxValue; i += 20) {
@@ -318,6 +330,9 @@ static uint16_t forcePadIdiom = 0;
 }
 
 - (void)setGridHeights:(NSArray<NSNumber *> *)values {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     NSUInteger maxValue = values.lastObject.unsignedIntValue;
     NSMutableArray *array = [NSMutableArray array];
     for (int i = 150; i < maxValue; i += 20) {
@@ -331,13 +346,16 @@ static uint16_t forcePadIdiom = 0;
 // Override app limit, I don't think this is healthy for battery, so I won't make it unlimited...
 %hook SBSwitcherChamoisSettings
 - (NSUInteger)maximumNumberOfAppsOnStage {
-    return 5;
+    return trollPadEnabled ? 5 : %orig;
 }
 %end
 
 // FIXME: Is this needed?
 %hook SBTraitsPipelineManager
 -(id)defaultOrientationAnimationSettingsAnimatable:(BOOL)animatable {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     forcePadIdiom++;
     id result = %orig;
     forcePadIdiom--;
@@ -348,11 +366,14 @@ static uint16_t forcePadIdiom = 0;
 %hook SBTraitsSceneParticipantDelegate
 // Allow upside down
 - (BOOL)_isAllowedToHavePortraitUpsideDown {
-    return YES;
+    return trollPadEnabled ? YES : %orig;
 }
 
 // Fix orientation issue for portrait-only apps
 - (NSInteger)_orientationMode {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     forcePadIdiom++;
     NSInteger result = %orig;
     forcePadIdiom--;
@@ -363,23 +384,26 @@ static uint16_t forcePadIdiom = 0;
 // Workaround for iPhones with home button not being able to open Control Center
 %hook CCSControlCenterDefaults
 - (NSUInteger)_defaultPresentationGesture {
-    return 1;
+    return trollPadEnabled ? 1 : %orig;
 }
 %end
 %hook SBHomeGestureSettings
 - (BOOL)isHomeGestureEnabled {
-    return YES;
+    return trollPadEnabled ? YES : %orig;
 }
 %end
 %hook SBControlCenterController
 -(NSUInteger)presentingEdge {
-    return 1;
+    return trollPadEnabled ? 1 : %orig;
 }
 %end
 
 // Forcibly enable resizable as iOS somehow disabled it in the external display
 %hook SBFluidSwitcherItemContainer
 - (void)setAllowedTouchResizeCorners:(NSUInteger)cornerMask {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     // !self.isResizingAllowed && 
     if (self._screen != UIScreen.mainScreen || isStageManagerActive()) {
         %orig(0b1111);
@@ -394,14 +418,16 @@ static uint16_t forcePadIdiom = 0;
 %hook SBAppResizeGrabberView
 - (void)setAlpha:(CGFloat)alpha {
     %orig;
-    self.hidden = pref.hideStageManagerResizeCorners;
+    if (trollPadEnabled) {
+        self.hidden = pref.hideStageManagerResizeCorners;
+    }
 }
 %end
 
 %hook SBFluidSwitcherViewController
 // Use iPadOS app switching animation instead
 - (BOOL)isDevicePad {
-    return pref.useiPadAppSwitchingAnimation;
+    return trollPadEnabled ? pref.useiPadAppSwitchingAnimation : %orig;
 }
 
 // Restore number of grid to 1
@@ -416,6 +442,9 @@ static uint16_t forcePadIdiom = 0;
 %hook SBAppSwitcherSettings
 - (void)setDefaultValues {
     %orig;
+    if (!trollPadEnabled) {
+        return;
+    }
     self.spacingBetweenLeadingEdgeAndIcon = 0;
     self.spacingBetweenTrailingEdgeAndLabels = 0;
 }
@@ -423,10 +452,13 @@ static uint16_t forcePadIdiom = 0;
 
 %hook UIApplication
 - (UIUserInterfaceLayoutDirection)userInterfaceLayoutDirection {
-    return forceStageManagerRightToLeft > 0 ? UIUserInterfaceLayoutDirectionRightToLeft : %orig;
+    return trollPadEnabled && forceStageManagerRightToLeft > 0 ? UIUserInterfaceLayoutDirectionRightToLeft : %orig;
 }
 
 - (id)_defaultSupportedInterfaceOrientations {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     forcePadIdiom++;
     id result = %orig;
     forcePadIdiom--;
@@ -437,82 +469,55 @@ static uint16_t forcePadIdiom = 0;
 // Allow upside down Home Screen
 %hook SBHomeScreenViewController
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations {
-    return %orig | UIInterfaceOrientationMaskPortraitUpsideDown;
+    return trollPadEnabled ? (%orig | UIInterfaceOrientationMaskPortraitUpsideDown) : %orig;
 }
 %end
 
 // Allow upside down Lock Screen
 %hook SBCoverSheetPrimarySlidingViewController
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations {
-    return %orig | UIInterfaceOrientationMaskPortraitUpsideDown;
+    return trollPadEnabled ? (%orig | UIInterfaceOrientationMaskPortraitUpsideDown) : %orig;
 }
 %end
 
 // Pass true to supportAppSceneRequests
 %hook UISApplicationInitializationContext
 - (id)initWithMainDisplayContext:(id)arg1 launchDisplayContext:(id)arg2 deviceContext:(id)arg3 persistedSceneIdentifiers:(id)arg4 supportAppSceneRequests:(BOOL)arg5 {
-    return %orig(arg1, arg2, arg3, arg4, YES);
+    return trollPadEnabled ? %orig(arg1, arg2, arg3, arg4, YES) : %orig;
 }
 %end
 
 // The following hooks are taken from various sources, please refer to tweaks that enable Slide Over.
 %hook SpringBoard
 - (NSInteger)homeScreenRotationStyle {
-    return pref.allowLandscapeHomeScreen ? 1 : %orig;
+    return trollPadEnabled && pref.allowLandscapeHomeScreen ? 1 : %orig;
 }
 %end
 
 %hook SBMedusaConfigurationUsageMetric
 - (BOOL)_isFloatingActive {
-    if (!isControlCenterStageManagerEnabled()) {
-        return %orig;
-    }
-    return isWindowingModeOff() ? NO : YES;
+    return isMultitaskingActive() ? YES : %orig;
 }
 %end
 
 %hook SBPlatformController
 - (BOOL)isHomeGestureEnabled {
-    return YES;
+    return trollPadEnabled ? YES : %orig;
 }
 
 - (NSInteger)medusaCapabilities {
-    return isWindowingModeOff() ? %orig : 2;
+    return trollPadEnabled ? 2 : %orig;
 }
 %end
 
 %group TPStageManagerCapabilityHooks
 %hook SBAppSwitcherDefaults
 - (BOOL)medusaMultitaskingEnabled {
-    if (!isControlCenterStageManagerEnabled()) {
-        return %orig;
-    }
-
-    switch (windowingMode()) {
-        case TPWindowingModeOff:
-            return NO;
-        case TPWindowingModeSplitView:
-        case TPWindowingModeStageManager:
-            return YES;
-        default:
-            return %orig;
-    }
+    return isMultitaskingActive() ? YES : %orig;
 }
 
 - (BOOL)chamoisWindowingEnabled {
-    if (!isControlCenterStageManagerEnabled()) {
-        return %orig;
-    }
-
-    switch (windowingMode()) {
-        case TPWindowingModeOff:
-        case TPWindowingModeSplitView:
-            return NO;
-        case TPWindowingModeStageManager:
-            return YES;
-        default:
-            return %orig;
-    }
+    return trollPadEnabled ? isStageManagerActive() : %orig;
 }
 %end
 
@@ -737,70 +742,74 @@ static uint16_t forcePadIdiom = 0;
 
 %hook SBApplication
 - (BOOL)isMedusaCapable {
-    return isWindowingModeOff() ? %orig :
-        pref.forceEnableMedusaForLandscapeOnlyApps ||
+    if (!isMultitaskingActive()) {
+        return %orig;
+    }
+    return pref.forceEnableMedusaForLandscapeOnlyApps ||
         (self.info.supportedInterfaceOrientations & UIInterfaceOrientationMaskPortrait) != 0;
 }
 
 - (BOOL)_supportsApplicationType:(int)arg1 {
-	return YES;
+	return isMultitaskingActive() ? YES : %orig;
 }
 %end
 
 %hook SBMainWorkspace
 - (BOOL)isMedusaEnabled {
-    if (!isControlCenterStageManagerEnabled()) {
-        return %orig;
-    }
-    return isWindowingEnabledByControlCenter();
+    return isMultitaskingActive() ? YES : %orig;
 }
 %end
 
 %hook SBFloatingDockController
 + (BOOL)isFloatingDockSupported {
-    return pref.isFloatingDockSupported ? YES : %orig;
+    return trollPadEnabled && pref.isFloatingDockSupported ? YES : %orig;
 }
 %end
 
 // Force iPad app switcher, otherwise it will be broken
 %hook SBAppSwitcherSettings
 - (NSInteger)effectiveSwitcherStyle {
-    return 2;
+    return trollPadEnabled ? 2 : %orig;
 }
 
 // Scales the grid switcher
 - (void)setGridSwitcherPageScale:(CGFloat)arg1 {
-    return pref.scaleGridSwitcher ? %orig(0.38) : %orig;
+    return trollPadEnabled && pref.scaleGridSwitcher ? %orig(0.38) : %orig;
 }
 
 - (void)setGridSwitcherVerticalNaturalSpacingPortrait:(CGFloat)arg1 {
-    return pref.scaleGridSwitcher ? %orig(65) : %orig;
+    return trollPadEnabled && pref.scaleGridSwitcher ? %orig(65) : %orig;
 }
 
 - (void)setGridSwitcherVerticalNaturalSpacingLandscape:(CGFloat)arg1 {
-    return pref.scaleGridSwitcher ? %orig(40) : %orig;
+    return trollPadEnabled && pref.scaleGridSwitcher ? %orig(40) : %orig;
 }
 
 - (void)setGridSwitcherHorizontalInterpageSpacingPortrait:(CGFloat)arg1 {
-    return pref.scaleGridSwitcher ? %orig(30) : %orig;
+    return trollPadEnabled && pref.scaleGridSwitcher ? %orig(30) : %orig;
 }
 
 - (void)setGridSwitcherHorizontalInterpageSpacingLandscape:(CGFloat)arg1 {
-    return pref.scaleGridSwitcher ? %orig(10) : %orig;
+    return trollPadEnabled && pref.scaleGridSwitcher ? %orig(10) : %orig;
 }
 %end
 
 // Unlock external display support for MDC versions
+static int (*originalExtDisplayEnabledFunc)(void);
+
 int hookedExtDisplayEnabledFunc() {
     // clang forgets to PAC this function, so we need this ugly line
     int hack = 0; if (hack) { printf(""); }
 
-    return 1;
+    return trollPadEnabled ? 1 : (originalExtDisplayEnabledFunc ? originalExtDisplayEnabledFunc() : 0);
 }
 
 // Bypass Keyboard & Mouse requirement
 %hook SBExternalDisplayRuntimeAvailabilitySettings
 - (void)setDefaultValues {
+    if (!trollPadEnabled) {
+        return %orig;
+    }
     self.requireHardwareKeyboard = NO;
     self.requirePointer = NO;
 }
@@ -836,8 +845,8 @@ static BOOL isMedusaCapabilityProperty(CFStringRef property) {
 }
 
 static BOOL shouldForceMultitaskingProperty(CFStringRef property) {
-    return (isEnhancedMultitaskingProperty(property) && !isWindowingModeOff()) ||
-        (isMedusaCapabilityProperty(property) && isStageManagerMode());
+    return trollPadEnabled && (isEnhancedMultitaskingProperty(property) ||
+        isMedusaCapabilityProperty(property));
 }
 
 %hookf(bool, MGGetBoolAnswer, CFStringRef property) {
@@ -867,6 +876,10 @@ static BOOL shouldForceMultitaskingProperty(CFStringRef property) {
 %end
 
 %ctor {
+    loadTrollPadEnabled();
+    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL,
+        trollPadPrefsChanged, CFSTR("com.kdt.trollpad/saved"), NULL,
+        CFNotificationSuspensionBehaviorCoalesce);
     pref = [TPPrefsObserver new];
     %init;
 
@@ -898,7 +911,8 @@ static BOOL shouldForceMultitaskingProperty(CFStringRef property) {
         extDisplayEnabledFunc = dlsym(sbFoundationHandle, "SBFIsChamoisExternalDisplayControllerAvailable");
     }
     if (extDisplayEnabledFunc) {
-        MSHookFunction((void *)extDisplayEnabledFunc, (void *)hookedExtDisplayEnabledFunc, NULL);
+        MSHookFunction((void *)extDisplayEnabledFunc, (void *)hookedExtDisplayEnabledFunc,
+            (void **)&originalExtDisplayEnabledFunc);
     }
 
 }

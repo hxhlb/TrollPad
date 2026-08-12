@@ -7,62 +7,168 @@
 static NSString *const TPEnableiPadKeyboardKey = @"TPEnableiPadKeyboard";
 static NSString *const TPEnableiPadKeyboardSpecifierID = @"ENABLE_IPAD_KEYBOARD";
 static NSString *const TPShowShortcutButtonsSpecifierID = @"SHOW_SHORTCUT_BUTTONS";
-static NSString *const TPWindowingModeKey = @"TPWindowingMode";
-static NSString *const TPWindowingModeSpecifierID = @"WINDOWING_MODE";
-static NSString *const TPStageManagerSideKey = @"TPStageManagerSide";
 static NSString *const TPStageManagerSideSpecifierID = @"STAGE_MANAGER_SIDE";
-static NSString *const TPMirrorStageManagerSwitcherSpecifierID = @"MIRROR_STAGE_MANAGER_SWITCHER";
-static NSInteger const TPWindowingModeStageManager = 2;
-static NSInteger const TPStageManagerSideRight = 1;
+static NSString *const TPSystemMultitaskingSpecifierID = @"CONTINUOUS-EXPOSE";
+static CFStringRef const TPSpringBoardPreferencesDomain = CFSTR("com.apple.springboard");
+
+static NSString *TPLocalized(NSString *key) {
+    NSBundle *bundle = [NSBundle bundleForClass:TPPRootListController.class];
+    return [bundle localizedStringForKey:key value:key table:@"Root"];
+}
+
+@interface TPPRootListController ()
+@property(nonatomic, assign) BOOL didShowRespringRequiredAlert;
+@end
+
+static id TPCopySpringBoardPreference(NSString *key) {
+    CFPreferencesAppSynchronize(TPSpringBoardPreferencesDomain);
+    CFPropertyListRef value = CFPreferencesCopyAppValue((__bridge CFStringRef)key, TPSpringBoardPreferencesDomain);
+    return CFBridgingRelease(value);
+}
+
+static BOOL TPReadSpringBoardBool(NSString *key, BOOL defaultValue) {
+    id value = TPCopySpringBoardPreference(key);
+    return value ? [value boolValue] : defaultValue;
+}
+
+static BOOL TPIsStageManagerEnabled(void) {
+    return TPReadSpringBoardBool(@"SBChamoisWindowingEnabled", NO);
+}
+
+static Class TPLoadNativeMultitaskingController(void) {
+    NSBundle *bundle = [NSBundle bundleWithPath:@"/System/Library/PreferenceBundles/MultitaskingAndGesturesSettings.bundle"];
+    if (![bundle load]) {
+        return Nil;
+    }
+    return bundle.principalClass;
+}
+
+static BOOL TPPreferenceRequiresRespring(NSString *key) {
+    static NSSet<NSString *> *keys;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        keys = [NSSet setWithArray:@[
+            @"SBExtendedDisplayOverrideSupportForAirPlayAndDontFileRadars",
+            @"SBExtendedDisplayContentsScaleAndDontFileRadars",
+            @"SBAppLibraryInDockEnabled",
+            @"SBRecentsEnabled",
+        ]];
+    });
+    return [keys containsObject:key];
+}
 
 @implementation TPPRootListController
 
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    [NSNotificationCenter.defaultCenter addObserver:self
+        selector:@selector(applicationDidBecomeActive:)
+        name:UIApplicationDidBecomeActiveNotification
+        object:nil];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [self refreshStageManagerControls];
+}
+
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)applicationDidBecomeActive:(NSNotification *)notification {
+    [self refreshStageManagerControls];
+}
+
+- (void)refreshStageManagerControls {
+    if (!_specifiers) {
+        return;
+    }
+
+    PSSpecifier *stageManagerSideSpecifier = [self specifierForID:TPStageManagerSideSpecifierID];
+    [stageManagerSideSpecifier setProperty:@(TPIsStageManagerEnabled()) forKey:PSEnabledKey];
+    if (stageManagerSideSpecifier) {
+        [self reloadSpecifier:stageManagerSideSpecifier animated:YES];
+    }
+}
+
 - (NSArray *)specifiers {
     if (!_specifiers) {
-        _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
-        self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Respring" style:UIBarButtonItemStylePlain target:self action:@selector(respring)];
+        NSMutableArray *specifiers = [[self loadSpecifiersFromPlistName:@"Root" target:self] mutableCopy];
+        _specifiers = specifiers;
+        self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:TPLocalized(@"Respring") style:UIBarButtonItemStylePlain target:self action:@selector(respring)];
+
+        if (@available(iOS 17.0, *)) {
+            PSSpecifier *systemMultitaskingSpecifier = [self specifierForID:TPSystemMultitaskingSpecifierID];
+            systemMultitaskingSpecifier.cellType = PSButtonCell;
+            systemMultitaskingSpecifier.detailControllerClass = Nil;
+            systemMultitaskingSpecifier.target = self;
+            systemMultitaskingSpecifier.buttonAction = @selector(openNativeMultitaskingSettings);
+            systemMultitaskingSpecifier.name = TPLocalized(@"Multitasking & Gestures");
+        }
 
         PSSpecifier *enableiPadKeyboardSpecifier = [self specifierForID:TPEnableiPadKeyboardSpecifierID];
         PSSpecifier *shortcutButtonsSpecifier = [self specifierForID:TPShowShortcutButtonsSpecifierID];
         BOOL enableiPadKeyboard = [[self readPreferenceValue:enableiPadKeyboardSpecifier] boolValue];
         [shortcutButtonsSpecifier setProperty:@(enableiPadKeyboard) forKey:PSEnabledKey];
 
-        PSSpecifier *windowingModeSpecifier = [self specifierForID:TPWindowingModeSpecifierID];
         PSSpecifier *stageManagerSideSpecifier = [self specifierForID:TPStageManagerSideSpecifierID];
-        PSSpecifier *mirrorStageManagerSwitcherSpecifier = [self specifierForID:TPMirrorStageManagerSwitcherSpecifierID];
-        NSInteger windowingMode = [[self readPreferenceValue:windowingModeSpecifier] integerValue];
-        NSInteger stageManagerSide = [[self readPreferenceValue:stageManagerSideSpecifier] integerValue];
-        [stageManagerSideSpecifier setProperty:@(windowingMode == TPWindowingModeStageManager) forKey:PSEnabledKey];
-        [mirrorStageManagerSwitcherSpecifier setProperty:@(windowingMode == TPWindowingModeStageManager && stageManagerSide == TPStageManagerSideRight) forKey:PSEnabledKey];
+        [stageManagerSideSpecifier setProperty:@(TPIsStageManagerEnabled()) forKey:PSEnabledKey];
     }
     return _specifiers;
+}
+
+- (void)openNativeMultitaskingSettings {
+    NSLog(@"[TrollPadEx] Multitasking & Gestures button tapped");
+    Class controllerClass = TPLoadNativeMultitaskingController();
+    if (!controllerClass) {
+        NSLog(@"[TrollPadEx] Failed to load MultitaskingAndGesturesSettings.bundle");
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:TPLocalized(@"Unavailable")
+            message:TPLocalized(@"The system Multitasking & Gestures settings bundle could not be loaded.")
+            preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:TPLocalized(@"OK") style:UIAlertActionStyleDefault handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
+        return;
+    }
+
+    NSLog(@"[TrollPadEx] Native controller class: %@", NSStringFromClass(controllerClass));
+    id controller = [[controllerClass alloc] init];
+    if (![controller isKindOfClass:UIViewController.class]) {
+        NSLog(@"[TrollPadEx] Native controller is not a UIViewController: %@", controller);
+        return;
+    }
+    if ([controller respondsToSelector:@selector(setRootController:)]) {
+        [controller setRootController:self.rootController];
+    }
+    if ([controller respondsToSelector:@selector(setSpecifier:)]) {
+        [controller setSpecifier:[self specifierForID:TPSystemMultitaskingSpecifierID]];
+    }
+    NSLog(@"[TrollPadEx] Pushing native controller");
+    [self.navigationController pushViewController:controller animated:YES];
 }
 
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
     [super setPreferenceValue:value specifier:specifier];
 
-    if ([[specifier propertyForKey:PSKeyNameKey] isEqualToString:TPEnableiPadKeyboardKey]) {
+    NSString *key = [specifier propertyForKey:PSKeyNameKey];
+
+    if ([key isEqualToString:TPEnableiPadKeyboardKey]) {
         PSSpecifier *shortcutButtonsSpecifier = [self specifierForID:TPShowShortcutButtonsSpecifierID];
         [shortcutButtonsSpecifier setProperty:@([value boolValue]) forKey:PSEnabledKey];
         [self reloadSpecifier:shortcutButtonsSpecifier animated:YES];
     }
 
-    if ([[specifier propertyForKey:PSKeyNameKey] isEqualToString:TPWindowingModeKey]) {
-        PSSpecifier *stageManagerSideSpecifier = [self specifierForID:TPStageManagerSideSpecifierID];
-        PSSpecifier *mirrorStageManagerSwitcherSpecifier = [self specifierForID:TPMirrorStageManagerSwitcherSpecifierID];
-        NSInteger stageManagerSide = [[self readPreferenceValue:stageManagerSideSpecifier] integerValue];
-        [stageManagerSideSpecifier setProperty:@([value integerValue] == TPWindowingModeStageManager) forKey:PSEnabledKey];
-        [mirrorStageManagerSwitcherSpecifier setProperty:@([value integerValue] == TPWindowingModeStageManager && stageManagerSide == TPStageManagerSideRight) forKey:PSEnabledKey];
-        [self reloadSpecifier:stageManagerSideSpecifier animated:YES];
-        [self reloadSpecifier:mirrorStageManagerSwitcherSpecifier animated:YES];
-    }
-
-    if ([[specifier propertyForKey:PSKeyNameKey] isEqualToString:TPStageManagerSideKey]) {
-        PSSpecifier *windowingModeSpecifier = [self specifierForID:TPWindowingModeSpecifierID];
-        PSSpecifier *mirrorStageManagerSwitcherSpecifier = [self specifierForID:TPMirrorStageManagerSwitcherSpecifierID];
-        NSInteger windowingMode = [[self readPreferenceValue:windowingModeSpecifier] integerValue];
-        [mirrorStageManagerSwitcherSpecifier setProperty:@(windowingMode == TPWindowingModeStageManager && [value integerValue] == TPStageManagerSideRight) forKey:PSEnabledKey];
-        [self reloadSpecifier:mirrorStageManagerSwitcherSpecifier animated:YES];
+    if (TPPreferenceRequiresRespring(key) && !self.didShowRespringRequiredAlert) {
+        self.didShowRespringRequiredAlert = YES;
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:TPLocalized(@"Respring Required")
+            message:TPLocalized(@"This system option is applied after a respring.")
+            preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:TPLocalized(@"Later") style:UIAlertActionStyleCancel handler:nil]];
+        __weak typeof(self) weakSelf = self;
+        [alert addAction:[UIAlertAction actionWithTitle:TPLocalized(@"Respring Now") style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+            [weakSelf respring];
+        }]];
+        [self presentViewController:alert animated:YES completion:nil];
     }
 }
 

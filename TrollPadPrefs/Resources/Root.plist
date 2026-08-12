@@ -8,37 +8,25 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>Control Center enables or disables multitasking. This option selects the windowing mode used while it is enabled. Stage Manager also unlocks main-display window resizing. When Stage Manager is on the right, Mirror App Switcher reverses the app switcher and its transitions. Respring after changing these options.</string>
+			<string>Disable TrollPadEx to remove all runtime changes immediately. On iOS 16, Control Center switches between Split View and Stage Manager. On iOS 17 and later, use the system Multitasking &amp; Gestures page.</string>
 			<key>label</key>
 			<string>Multitasking</string>
 		</dict>
 		<dict>
 			<key>cell</key>
-			<string>PSLinkListCell</string>
+			<string>PSSwitchCell</string>
 			<key>default</key>
-			<integer>2</integer>
-			<key>detail</key>
-			<string>PSListItemsController</string>
+			<true/>
 			<key>defaults</key>
-			<string>com.apple.springboard</string>
-			<key>key</key>
-			<string>TPWindowingMode</string>
+			<string>com.kdt.trollpad</string>
 			<key>id</key>
-			<string>WINDOWING_MODE</string>
+			<string>TROLLPAD_ENABLED</string>
+			<key>key</key>
+			<string>TPTrollPadEnabled</string>
 			<key>label</key>
-			<string>Windowing Mode</string>
-			<key>validTitles</key>
-			<array>
-				<string>Off</string>
-				<string>Split View</string>
-				<string>Stage Manager</string>
-			</array>
-			<key>validValues</key>
-			<array>
-				<integer>0</integer>
-				<integer>1</integer>
-				<integer>2</integer>
-			</array>
+			<string>Enable TrollPadEx</string>
+			<key>PostNotification</key>
+			<string>com.kdt.trollpad/saved</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -65,6 +53,8 @@
 				<integer>0</integer>
 				<integer>1</integer>
 			</array>
+			<key>PostNotification</key>
+			<string>com.kdt.trollpad/saved</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -74,11 +64,13 @@
 			<key>defaults</key>
 			<string>com.apple.springboard</string>
 			<key>id</key>
-			<string>MIRROR_STAGE_MANAGER_SWITCHER</string>
+			<string>MIRROR_APP_SWITCHER</string>
 			<key>key</key>
 			<string>TPMirrorStageManagerSwitcher</string>
 			<key>label</key>
 			<string>Mirror App Switcher</string>
+			<key>PostNotification</key>
+			<string>com.kdt.trollpad/saved</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -123,6 +115,8 @@
 			<string>TPHideStageManagerResizeCorners</string>
 			<key>label</key>
 			<string>Hide resize corners</string>
+			<key>PostNotification</key>
+			<string>com.kdt.trollpad/saved</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -150,7 +144,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>Disable the iPadOS keyboard to restore iPhone layouts, including Chinese 9-Key.</string>
+			<string>Disable the iPadOS keyboard to restore iPhone layouts, mainly for Chinese 9-Key input.</string>
 			<key>label</key>
 			<string>Keyboard</string>
 		</dict>
@@ -203,6 +197,8 @@
 			<string>TPForceEnableMedusaForLandscapeOnlyApps</string>
 			<key>label</key>
 			<string>Force resizable window for games</string>
+			<key>PostNotification</key>
+			<string>com.kdt.trollpad/saved</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -215,6 +211,8 @@
 			<string>TPUseiPadAppSwitchingAnimation</string>
 			<key>label</key>
 			<string>iPadOS app switching animation</string>
+			<key>PostNotification</key>
+			<string>com.kdt.trollpad/saved</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -227,6 +225,8 @@
 			<string>TPAllowLandscapeHomeScreen</string>
 			<key>label</key>
 			<string>Allow landscape Home Screen</string>
+			<key>PostNotification</key>
+			<string>com.kdt.trollpad/saved</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -239,6 +239,8 @@
 			<string>TPIsFloatingDockSupported</string>
 			<key>label</key>
 			<string>Floating Dock</string>
+			<key>PostNotification</key>
+			<string>com.kdt.trollpad/saved</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -279,6 +281,8 @@
 			<string>TPScaleGridSwitcher</string>
 			<key>label</key>
 			<string>Scale Grid Switcher</string>
+			<key>PostNotification</key>
+			<string>com.kdt.trollpad/saved</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -308,6 +312,6 @@
 		</dict>
 	</array>
 	<key>title</key>
-	<string>TrollPad</string>
+	<string>TrollPadEx</string>
 </dict>
 </plist>

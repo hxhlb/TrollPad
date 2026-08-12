@@ -6,8 +6,10 @@
 	<string>English</string>
 	<key>CFBundleExecutable</key>
 	<string>TrollPad</string>
+	<key>CFBundleDisplayName</key>
+	<string>TrollPadEx</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.kdt.trollpad</string>
+	<string>com.banana.trollpadex.preferences</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundlePackageType</key>

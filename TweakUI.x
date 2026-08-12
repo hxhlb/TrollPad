@@ -1,7 +1,7 @@
 #import "UIKitPrivate.h"
 #import <objc/runtime.h>
 
-static BOOL enableiPadKeyboard = YES, forcePadKBIdiom = YES, showShortcutButtonsOnKeyboard;
+static BOOL trollPadEnabled = YES, enableiPadKeyboard = YES, forcePadKBIdiom = YES, showShortcutButtonsOnKeyboard;
 static BOOL keyboardHooksInitialized;
 
 %group TPiPadKeyboardHooks
@@ -123,10 +123,17 @@ static void loadPrefs() {
     Boolean keyExists = false;
 
     CFPreferencesAppSynchronize(appID);
+    trollPadEnabled = CFPreferencesGetAppBooleanValue(CFSTR("TPTrollPadEnabled"), appID, &keyExists);
+    if (!keyExists) {
+        trollPadEnabled = YES;
+    }
+
+    keyExists = false;
     enableiPadKeyboard = CFPreferencesGetAppBooleanValue(CFSTR("TPEnableiPadKeyboard"), appID, &keyExists);
     if (!keyExists) {
         enableiPadKeyboard = YES;
     }
+    enableiPadKeyboard = trollPadEnabled && enableiPadKeyboard;
     showShortcutButtonsOnKeyboard = enableiPadKeyboard &&
         CFPreferencesGetAppBooleanValue(CFSTR("TPShowShortcutButtonsOnKeyboard"), appID, NULL);
 }
