@@ -20,10 +20,10 @@
 
 static TPPrefsObserver* pref;
 
-typedef NS_ENUM(NSInteger, TPMultitaskingMode) {
-    TPMultitaskingModeFollowControlCenter = 0,
-    TPMultitaskingModeOff = 1,
-    TPMultitaskingModeStageManager = 3,
+typedef NS_ENUM(NSInteger, TPWindowingMode) {
+    TPWindowingModeOff = 0,
+    TPWindowingModeSplitView = 1,
+    TPWindowingModeStageManager = 2,
 };
 
 typedef NS_ENUM(NSInteger, TPStageManagerSide) {
@@ -36,12 +36,36 @@ typedef struct {
     double trailingAlpha;
 } TPSwitcherGradientWallpaperAttributes;
 
-static BOOL isMultitaskingModeOff() {
-    return pref.multitaskingMode == TPMultitaskingModeOff;
+static TPWindowingMode windowingMode() {
+    switch (pref.windowingMode) {
+        case TPWindowingModeOff:
+        case TPWindowingModeSplitView:
+        case TPWindowingModeStageManager:
+            return pref.windowingMode;
+        default:
+            return TPWindowingModeStageManager;
+    }
+}
+
+static BOOL isControlCenterStageManagerEnabled() {
+    id value = [NSUserDefaults.standardUserDefaults objectForKey:@"SBChamoisWindowingEnabled"];
+    return value ? [value boolValue] : NO;
+}
+
+static BOOL isWindowingModeOff() {
+    return windowingMode() == TPWindowingModeOff;
+}
+
+static BOOL isWindowingEnabledByControlCenter() {
+    return isControlCenterStageManagerEnabled() && !isWindowingModeOff();
 }
 
 static BOOL isStageManagerMode() {
-    return pref.multitaskingMode == TPMultitaskingModeStageManager;
+    return windowingMode() == TPWindowingModeStageManager;
+}
+
+static BOOL isStageManagerActive() {
+    return isControlCenterStageManagerEnabled() && isStageManagerMode();
 }
 
 static BOOL shouldUseRightStageManagerSide() {
@@ -263,12 +287,17 @@ static uint16_t forcePadIdiom = 0;
 %group TPStageManagerSwitcherHook
 %hook SBSwitcherController
 - (NSUInteger)windowManagementStyle {
-    switch (pref.multitaskingMode) {
-        case TPMultitaskingModeOff:
+    if (!isControlCenterStageManagerEnabled()) {
+        return %orig;
+    }
+
+    switch (windowingMode()) {
+        case TPWindowingModeOff:
             return 0;
-        case TPMultitaskingModeStageManager:
+        case TPWindowingModeSplitView:
+            return 1;
+        case TPWindowingModeStageManager:
             return 2;
-        case TPMultitaskingModeFollowControlCenter:
         default:
             return %orig;
     }
@@ -352,7 +381,7 @@ static uint16_t forcePadIdiom = 0;
 %hook SBFluidSwitcherItemContainer
 - (void)setAllowedTouchResizeCorners:(NSUInteger)cornerMask {
     // !self.isResizingAllowed && 
-    if (self._screen != UIScreen.mainScreen || isStageManagerMode()) {
+    if (self._screen != UIScreen.mainScreen || isStageManagerActive()) {
         %orig(0b1111);
         // 1100: enable resizing for bottoms
         // 1111: enable resizing for all corners
@@ -435,7 +464,10 @@ static uint16_t forcePadIdiom = 0;
 
 %hook SBMedusaConfigurationUsageMetric
 - (BOOL)_isFloatingActive {
-    return isMultitaskingModeOff() ? %orig : YES;
+    if (!isControlCenterStageManagerEnabled()) {
+        return %orig;
+    }
+    return isWindowingModeOff() ? NO : YES;
 }
 %end
 
@@ -445,31 +477,39 @@ static uint16_t forcePadIdiom = 0;
 }
 
 - (NSInteger)medusaCapabilities {
-    return isMultitaskingModeOff() ? %orig : 2;
+    return isWindowingModeOff() ? %orig : 2;
 }
 %end
 
 %group TPStageManagerCapabilityHooks
 %hook SBAppSwitcherDefaults
 - (BOOL)medusaMultitaskingEnabled {
-    switch (pref.multitaskingMode) {
-        case TPMultitaskingModeOff:
+    if (!isControlCenterStageManagerEnabled()) {
+        return %orig;
+    }
+
+    switch (windowingMode()) {
+        case TPWindowingModeOff:
             return NO;
-        case TPMultitaskingModeStageManager:
+        case TPWindowingModeSplitView:
+        case TPWindowingModeStageManager:
             return YES;
-        case TPMultitaskingModeFollowControlCenter:
         default:
             return %orig;
     }
 }
 
 - (BOOL)chamoisWindowingEnabled {
-    switch (pref.multitaskingMode) {
-        case TPMultitaskingModeOff:
+    if (!isControlCenterStageManagerEnabled()) {
+        return %orig;
+    }
+
+    switch (windowingMode()) {
+        case TPWindowingModeOff:
+        case TPWindowingModeSplitView:
             return NO;
-        case TPMultitaskingModeStageManager:
+        case TPWindowingModeStageManager:
             return YES;
-        case TPMultitaskingModeFollowControlCenter:
         default:
             return %orig;
     }
@@ -478,15 +518,15 @@ static uint16_t forcePadIdiom = 0;
 
 %hook SBApplication
 - (BOOL)supportsChamoisSceneResizing {
-    return isStageManagerMode() ? YES : %orig;
+    return isStageManagerActive() ? YES : %orig;
 }
 
 - (BOOL)supportsChamoisViewResizing {
-    return isStageManagerMode() ? YES : %orig;
+    return isStageManagerActive() ? YES : %orig;
 }
 
 - (BOOL)alwaysMaximizedInChamois {
-    return isStageManagerMode() ? NO : %orig;
+    return isStageManagerActive() ? NO : %orig;
 }
 %end
 %end
@@ -697,7 +737,7 @@ static uint16_t forcePadIdiom = 0;
 
 %hook SBApplication
 - (BOOL)isMedusaCapable {
-    return isMultitaskingModeOff() ? %orig :
+    return isWindowingModeOff() ? %orig :
         pref.forceEnableMedusaForLandscapeOnlyApps ||
         (self.info.supportedInterfaceOrientations & UIInterfaceOrientationMaskPortrait) != 0;
 }
@@ -709,7 +749,10 @@ static uint16_t forcePadIdiom = 0;
 
 %hook SBMainWorkspace
 - (BOOL)isMedusaEnabled {
-    return isMultitaskingModeOff() ? %orig : YES;
+    if (!isControlCenterStageManagerEnabled()) {
+        return %orig;
+    }
+    return isWindowingEnabledByControlCenter();
 }
 %end
 
@@ -793,7 +836,7 @@ static BOOL isMedusaCapabilityProperty(CFStringRef property) {
 }
 
 static BOOL shouldForceMultitaskingProperty(CFStringRef property) {
-    return (isEnhancedMultitaskingProperty(property) && !isMultitaskingModeOff()) ||
+    return (isEnhancedMultitaskingProperty(property) && !isWindowingModeOff()) ||
         (isMedusaCapabilityProperty(property) && isStageManagerMode());
 }
 
@@ -804,6 +847,7 @@ static BOOL shouldForceMultitaskingProperty(CFStringRef property) {
     return %orig;
 }
 
+%group TPMobileGestaltCopyAnswerHooks
 %hookf(CFTypeRef, MGCopyAnswer, CFStringRef property, CFDictionaryRef options) {
     if (shouldForceMultitaskingProperty(property)) {
         return CFRetain(kCFBooleanTrue);
@@ -820,10 +864,17 @@ static BOOL shouldForceMultitaskingProperty(CFStringRef property) {
     }
     return %orig;
 }
+%end
 
 %ctor {
     pref = [TPPrefsObserver new];
     %init;
+
+    if (@available(iOS 18.0, *)) {
+        // These private MobileGestalt functions are unsafe to hook on iOS 18.
+    } else {
+        %init(TPMobileGestaltCopyAnswerHooks);
+    }
 
     if (canInstallStageManagerSwitcherHook()) {
         %init(TPStageManagerSwitcherHook);

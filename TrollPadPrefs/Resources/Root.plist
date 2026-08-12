@@ -8,7 +8,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>Follow Control Center preserves the current behavior. Stage Manager also unlocks main-display window resizing. When Stage Manager is on the right, Mirror App Switcher reverses the app switcher and its transitions. Respring after changing these options.</string>
+			<string>Control Center enables or disables multitasking. This option selects the windowing mode used while it is enabled. Stage Manager also unlocks main-display window resizing. When Stage Manager is on the right, Mirror App Switcher reverses the app switcher and its transitions. Respring after changing these options.</string>
 			<key>label</key>
 			<string>Multitasking</string>
 		</dict>
@@ -16,28 +16,28 @@
 			<key>cell</key>
 			<string>PSLinkListCell</string>
 			<key>default</key>
-			<integer>0</integer>
+			<integer>2</integer>
 			<key>detail</key>
 			<string>PSListItemsController</string>
 			<key>defaults</key>
 			<string>com.apple.springboard</string>
 			<key>key</key>
-			<string>TPMultitaskingMode</string>
+			<string>TPWindowingMode</string>
 			<key>id</key>
-			<string>MULTITASKING_MODE</string>
+			<string>WINDOWING_MODE</string>
 			<key>label</key>
-			<string>Multitasking Mode</string>
+			<string>Windowing Mode</string>
 			<key>validTitles</key>
 			<array>
-				<string>Follow Control Center</string>
 				<string>Off</string>
+				<string>Split View</string>
 				<string>Stage Manager</string>
 			</array>
 			<key>validValues</key>
 			<array>
 				<integer>0</integer>
 				<integer>1</integer>
-				<integer>3</integer>
+				<integer>2</integer>
 			</array>
 		</dict>
 		<dict>

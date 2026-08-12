@@ -9,7 +9,8 @@
     NSArray *specifiers = %orig;
 	 for (PSSpecifier *specifier in specifiers) {
         NSString *key = specifier.properties[@"key"];
-        if ([key hasPrefix:@"SBChamois"]) {
+        if ([key hasPrefix:@"SBChamois"] &&
+            ![key isEqualToString:@"SBChamoisWindowingEnabled"]) {
             specifier.properties[@"key"] = [@"TP" stringByAppendingString:key];
         }
     }

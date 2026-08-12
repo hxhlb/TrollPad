@@ -2,5 +2,5 @@
 
 @interface TPPrefsObserver : NSObject
 @property(nonatomic, assign) BOOL allowLandscapeHomeScreen, forceEnableMedusaForLandscapeOnlyApps, hideStageManagerResizeCorners, useiPadAppSwitchingAnimation, isFloatingDockSupported, scaleGridSwitcher, mirrorStageManagerSwitcher;
-@property(nonatomic, assign) NSInteger multitaskingMode, stageManagerSide;
+@property(nonatomic, assign) NSInteger windowingMode, stageManagerSide;
 @end

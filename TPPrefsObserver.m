@@ -9,7 +9,7 @@
     [self observeKey:@"TPUseiPadAppSwitchingAnimation"];
     [self observeKey:@"TPIsFloatingDockSupported"];
     [self observeKey:@"TPScaleGridSwitcher"];
-    [self observeKey:@"TPMultitaskingMode"];
+    [self observeKey:@"TPWindowingMode"];
     [self observeKey:@"TPStageManagerSide"];
     [self observeKey:@"TPMirrorStageManagerSwitcher"];
     // Fetch keys
@@ -33,7 +33,8 @@ keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)contex
     self.useiPadAppSwitchingAnimation = [defaults boolForKey:@"TPUseiPadAppSwitchingAnimation"];
     self.isFloatingDockSupported = [defaults boolForKey:@"TPIsFloatingDockSupported"];
     self.scaleGridSwitcher = [defaults boolForKey:@"TPScaleGridSwitcher"];
-    self.multitaskingMode = [defaults integerForKey:@"TPMultitaskingMode"];
+    id windowingMode = [defaults objectForKey:@"TPWindowingMode"];
+    self.windowingMode = windowingMode ? [windowingMode integerValue] : 2;
     self.stageManagerSide = [defaults integerForKey:@"TPStageManagerSide"];
     id mirrorStageManagerSwitcher = [defaults objectForKey:@"TPMirrorStageManagerSwitcher"];
     self.mirrorStageManagerSwitcher = mirrorStageManagerSwitcher ? [mirrorStageManagerSwitcher boolValue] : YES;
