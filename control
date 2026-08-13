@@ -1,6 +1,6 @@
 Package: com.banana.trollpadex
 Name: TrollPadEx
-Version: 2.0
+Version: 2.0.1
 Architecture: iphoneos-arm
 Description: Enhanced iPhone multitasking and Stage Manager controls based on TrollPad.
 Maintainer: banana

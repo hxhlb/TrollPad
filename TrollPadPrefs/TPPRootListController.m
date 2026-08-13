@@ -37,6 +37,19 @@ static BOOL TPIsStageManagerEnabled(void) {
     return TPReadSpringBoardBool(@"SBChamoisWindowingEnabled", NO);
 }
 
+static void TPRestartStageManager(void) {
+    NSUserDefaults *springBoardDefaults = [[NSUserDefaults alloc]
+        initWithSuiteName:@"com.apple.springboard"];
+    [springBoardDefaults setBool:NO forKey:@"SBChamoisWindowingEnabled"];
+    [springBoardDefaults synchronize];
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+        dispatch_get_main_queue(), ^{
+            [springBoardDefaults setBool:YES forKey:@"SBChamoisWindowingEnabled"];
+            [springBoardDefaults synchronize];
+        });
+}
+
 static Class TPLoadNativeMultitaskingController(void) {
     NSBundle *bundle = [NSBundle bundleWithPath:@"/System/Library/PreferenceBundles/MultitaskingAndGesturesSettings.bundle"];
     if (![bundle load]) {
@@ -148,9 +161,19 @@ static BOOL TPPreferenceRequiresRespring(NSString *key) {
 }
 
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
+    NSString *key = [specifier propertyForKey:PSKeyNameKey];
+    id previousValue = [self readPreferenceValue:specifier];
+    BOOL restartStageManager = [key isEqualToString:@"TPStageManagerSide"] &&
+        ![previousValue isEqual:value] && TPIsStageManagerEnabled();
+
     [super setPreferenceValue:value specifier:specifier];
 
-    NSString *key = [specifier propertyForKey:PSKeyNameKey];
+    if (restartStageManager) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
+            dispatch_get_main_queue(), ^{
+                TPRestartStageManager();
+            });
+    }
 
     if ([key isEqualToString:TPEnableiPadKeyboardKey]) {
         PSSpecifier *shortcutButtonsSpecifier = [self specifierForID:TPShowShortcutButtonsSpecifierID];
