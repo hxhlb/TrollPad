@@ -11,6 +11,8 @@ static NSString *const TPStageManagerSideSpecifierID = @"STAGE_MANAGER_SIDE";
 static NSString *const TPSystemMultitaskingSpecifierID = @"CONTINUOUS-EXPOSE";
 static CFStringRef const TPSpringBoardPreferencesDomain = CFSTR("com.apple.springboard");
 
+extern void TPPrepareNativeMultitaskingSettingsHooks(void);
+
 static NSString *TPLocalized(NSString *key) {
     NSBundle *bundle = [NSBundle bundleForClass:TPPRootListController.class];
     return [bundle localizedStringForKey:key value:key table:@"Root"];
@@ -40,6 +42,7 @@ static Class TPLoadNativeMultitaskingController(void) {
     if (![bundle load]) {
         return Nil;
     }
+    TPPrepareNativeMultitaskingSettingsHooks();
     return bundle.principalClass;
 }
 
@@ -119,7 +122,6 @@ static BOOL TPPreferenceRequiresRespring(NSString *key) {
 }
 
 - (void)openNativeMultitaskingSettings {
-    NSLog(@"[TrollPadEx] Multitasking & Gestures button tapped");
     Class controllerClass = TPLoadNativeMultitaskingController();
     if (!controllerClass) {
         NSLog(@"[TrollPadEx] Failed to load MultitaskingAndGesturesSettings.bundle");
@@ -131,7 +133,6 @@ static BOOL TPPreferenceRequiresRespring(NSString *key) {
         return;
     }
 
-    NSLog(@"[TrollPadEx] Native controller class: %@", NSStringFromClass(controllerClass));
     id controller = [[controllerClass alloc] init];
     if (![controller isKindOfClass:UIViewController.class]) {
         NSLog(@"[TrollPadEx] Native controller is not a UIViewController: %@", controller);
@@ -143,7 +144,6 @@ static BOOL TPPreferenceRequiresRespring(NSString *key) {
     if ([controller respondsToSelector:@selector(setSpecifier:)]) {
         [controller setSpecifier:[self specifierForID:TPSystemMultitaskingSpecifierID]];
     }
-    NSLog(@"[TrollPadEx] Pushing native controller");
     [self.navigationController pushViewController:controller animated:YES];
 }
 
